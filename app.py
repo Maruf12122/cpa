@@ -30,8 +30,6 @@ def ref_click(ref_id):
     referer = request.headers.get('Referer', '') or request.headers.get('referer', '')
     for row in panel_data:
         if row['id'] == ref_id:
-            # ক্লিক কাউন্ট বাড়ানোর সিদ্ধান্ত এখন ফ্রন্টএন্ড এ হবে (device একবার ক্লিক করেছে কি না)
-            # তাই এখানে শুধু total count বাড়ানো হচ্ছে, সেটা ফ্রন্টএন্ড থেকে POST এড করা যেতে পারে ভবিষ্যতে
             row['count'] += 1
 
             if referer == '' or referer.startswith(request.host_url):
@@ -55,4 +53,4 @@ def delete_ref(ref_id):
     return jsonify({'status': 'success'})
 
 if __name__ == '__main__':
-    socketio.run(app, debug=True)
+    socketio.run(app, debug=True, host='0.0.0.0', port=8080)
