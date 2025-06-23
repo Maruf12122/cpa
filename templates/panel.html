@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Referral Panel</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 30px; }
+        table { border-collapse: collapse; margin-top: 20px; width: 100%; }
+        table, th, td { border: 1px solid #888; }
+        th, td { padding: 10px; text-align: center; vertical-align: top; }
+        a { color: blue; }
+        button { padding: 6px 12px; font-size: 14px; cursor: pointer; }
+        .delete-btn { background-color: #ff4d4d; color: white; border: none; border-radius: 4px; }
+        .delete-btn:hover { background-color: #e60000; }
+        .referer-list { text-align: left; max-height: 100px; overflow-y: auto; font-size: 12px; margin-top: 5px; }
+        .copy-btn { background-color: #4CAF50; color: white; border: none; border-radius: 4px; margin-left: 5px; }
+        .copy-btn:hover { background-color: #3e8e41; }
+        .click-btn { background-color: #2196F3; color: white; border: none; border-radius: 4px; margin-left: 5px; }
+        .click-btn:hover { background-color: #0b7dda; }
+    </style>
+</head>
+<body>
+    <h2>🔁 Real-time Referral Panel with Delete, Copy & Single Click per Device</h2>
+
+    <form action="/generate" method="POST">
+        <button type="submit">➕ Generate New Referral URL</button>
+    </form>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Serial</th>
+                <th>Referral URL</th>
+                <th>Total Clicks</th>
+                <th>Direct Clicks</th>
+                <th>Referer Websites</th>
+                <th>Actions</th>
+                <th>Delete</th>
+            </tr>
+        </thead>
+        <tbody id="panel-body">
+            {% for row in data %}
+                <tr data-id="{{ row.id }}">
+                    <td>{{ loop.index }}</td>
+                    <td>
+                        <a href="{{ row.url }}" target="_blank" class="ref-link">{{ row.url }}</a>
+                        <button class="copy-btn" onclick="copyLink(event, '{{ row.url }}')">Copy</button>
+                    </td>
+                    <td>{{ row.count }}</td>
+                    <td>{{ row.direct_clicks }}</td>
+                    <td class="referer-list">
+                        {% if row.referer_counts %}
+                            <ul>
+                            {% for site, cnt in row.referer_counts.items() %}
+                                <li>{{ site }} : {{ cnt }}</li>
+                            {% endfor %}
+                            </ul>
+                        {% else %}
+                            None
+                        {% endif %}
+                    </td>
+                    <td>
+                        <button class="click-btn" onclick="handleClick(event, '{{ row.id }}', '{{ row.url }}')">Simulate Click</button>
+                    </td>
+                    <td>
+                        <button class="delete-btn" onclick="deleteRef('{{ row.id }}')">Delete</button>
+                    </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+<script>
+    const socket = io();
+
+    socket.on('update_panel', function (data) {
+        let html = '';
+        data.forEach((row, i) => {
+            let refererHtml = 'None';
+            if (Object.keys(row.referer_counts).length > 0) {
+                refererHtml = '<ul>';
+                for (const [site, cnt] of Object.entries(row.referer_counts)) {
+                    refererHtml += `<li>${site} : ${cnt}</li>`;
+                }
+                refererHtml += '</ul>';
+            }
+            html += `
+                <tr data-id="${row.id}">
+                    <td>${i + 1}</td>
+                    <td>
+                        <a href="${row.url}" target="_blank" class="ref-link">${row.url}</a>
+                        <button class="copy-btn" onclick="copyLink(event, '${row.url}')">Copy</button>
+                    </td>
+                    <td>${row.count}</td>
+                    <td>${row.direct_clicks}</td>
+                    <td class="referer-list">${refererHtml}</td>
+                    <td><button class="click-btn" onclick="handleClick(event, '${row.id}', '${row.url}')">Simulate Click</button></td>
+                    <td><button class="delete-btn" onclick="deleteRef('${row.id}')">Delete</button></td>
+                </tr>
+            `;
+        });
+        document.getElementById('panel-body').innerHTML = html;
+    });
+
+    function deleteRef(id) {
+        fetch(`/delete/${id}`, { method: 'POST' })
+        .then(res => res.json())
+        .then(data => {
+            if(data.status === 'success'){
+                console.log('Deleted:', id);
+            }
+        })
+        .catch(err => console.error('Delete error:', err));
+    }
+
+    function copyLink(event, url) {
+        event.preventDefault();
+        navigator.clipboard.writeText(url).then(() => {
+            alert('Copied to clipboard: ' + url);
+        });
+    }
+
+    function handleClick(event, id, url) {
+        event.preventDefault();
+        const clickedLinks = JSON.parse(sessionStorage.getItem('clickedLinks') || '{}');
+        if(clickedLinks[id]) {
+            alert('You already clicked this link from this device/session!');
+            return;
+        }
+        clickedLinks[id] = true;
+        sessionStorage.setItem('clickedLinks', JSON.stringify(clickedLinks));
+
+        // Open link in new tab
+        window.open(url, '_blank');
+
+        // Increase click count by calling backend endpoint (optional)
+        // Right now, click count is increased when /ref/<id> route is opened in backend automatically
+        // so no need to do anything extra here
+    }
+
+    // Optional: To catch clicks on actual referral link and block multiple clicks from same device/session
+    document.addEventListener('click', function(e) {
+        if(e.target.classList.contains('ref-link')) {
+            e.preventDefault();
+            const id = e.target.closest('tr').dataset.id;
+            handleClick(e, id, e.target.href);
+        }
+    });
+</script>
+</body>
+</html>
